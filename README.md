@@ -1,12 +1,12 @@
-# Refinimo
+<img src="public/images/readme-banner-decorative.png" alt="Refinimo — Collaborative planning poker" width="100%">
 
-![Refinimo logo](public/images/logo.png)
+![Refinimo](public/images/headings/refinimo.png)
 
 Refinimo is a collaborative planning poker app for teams that want estimation sessions to feel simple, quick, and a little less ceremonial.
 
 Create a room, invite your teammates, vote privately, reveal together, and use the discussion to land on a shared estimate. Refinimo runs as a static web app and uses your own Firebase Realtime Database project for live room sync, so there is no custom backend server to deploy or maintain.
 
-## Why Refinimo Exists
+![Why It Exist](public/images/headings/why-it-exists.png)
 
 Planning poker is best when it stays out of the way.
 
@@ -75,7 +75,7 @@ Profiles let each participant tune their name, avatar, theme, room display, and 
 
 </details>
 
-## How It Works
+![How It Works](public/images/headings/how-it-works.png)
 
 Refinimo is intentionally small in shape:
 
@@ -96,7 +96,7 @@ In practice:
 
 That means teams keep control of their Firebase project and room data. Refinimo provides the interface; your Firebase project provides the live sync.
 
-## Run It Locally
+![Run It Locally](public/images/headings/run-it-locally.png)
 
 Clone the repository:
 
@@ -108,8 +108,10 @@ cd refinimo
 Install dependencies:
 
 ```bash
-npm install
+npm run init
 ```
+
+The init command installs dependencies, reserves a local dev port, writes that port to `.env.local`, and adds `refinimo.local` to your hosts file. On Windows, run it from an elevated PowerShell window so it can update `C:\Windows\System32\drivers\etc\hosts`.
 
 Start the development server:
 
@@ -117,15 +119,15 @@ Start the development server:
 npm run dev
 ```
 
-Open the app at:
+Open the app at the URL printed by `npm run init`, for example:
 
 ```text
-http://localhost:3000
+http://refinimo.local:3000
 ```
 
 To use real rooms locally, create a Firebase project, enable Realtime Database, register a Firebase Web app, and paste the generated config into Refinimo. The detailed Firebase walkthrough lives in [CONFIG.md](CONFIG.md).
 
-## Tech Stack
+![Tech Stack](public/images/headings/tech-stack.png)
 
 - Vue 3
 - TypeScript
@@ -160,9 +162,10 @@ public/
 
 </details>
 
-## Useful Commands
+![Local Commands](public/images/headings/local-commands.png)
 
 ```bash
+npm run init         # install dependencies and configure refinimo.local
 npm run dev          # start the local Vite dev server
 npm run build        # type-check and build production assets
 npm run preview      # preview the production build
@@ -183,7 +186,7 @@ npx playwright install chromium
 
 The E2E suite uses a mocked Firebase server, so tests can exercise room flows without requiring a live Firebase project.
 
-## Deployment
+![Deployment](public/images/headings/deployment.png)
 
 Refinimo is built as static files and is intended to be hosted at:
 
@@ -195,6 +198,6 @@ For the custom domain, keep the Vite base path at `/`. GitHub Pages deep links a
 
 Firebase Realtime Database does not need a special domain change for the current app. If Firebase Auth, App Check, or Firebase Hosting are added later, the deployed domain should be added to the relevant Firebase allowed-domain settings.
 
-## Credits
+![Credit & License](public/images/headings/credit-and-license.png)
 
 Refinimo is built with Vue, Vite, Vuetify, Firebase, DiceBear, Material Design Icons, Playwright, Vitest, and a lot of small open-source gifts that make web apps nicer to build.

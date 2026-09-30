@@ -2,13 +2,11 @@ import { createRequire } from 'node:module'
 import { fileURLToPath, URL } from 'node:url'
 import Vue from '@vitejs/plugin-vue'
 import Fonts from 'unplugin-fonts/vite'
-import { defineConfig, type Plugin } from 'vite'
+import { defineConfig, loadEnv, type Plugin } from 'vite'
 import Vuetify, { transformAssetUrls } from 'vite-plugin-vuetify'
 
 const require = createRequire(import.meta.url)
 const packageJson = require('./package.json') as { version: string }
-const useFirebaseMock = process.env.VITE_REFINIMO_FIREBASE_MOCK === '1'
-const basePath = process.env.VITE_REFINIMO_BASE_PATH ?? '/'
 
 function firebaseMockServerPlugin (): Plugin {
   const state: Record<string, unknown> = {}
@@ -165,52 +163,69 @@ function splitMockPath (path: string) {
   return normalizeMockPath(path).split('/').filter(Boolean)
 }
 
+function parsePort (value: string | undefined) {
+  const port = Number(value)
+  return Number.isInteger(port) && port > 0 && port < 65_536 ? port : undefined
+}
+
 // https://vitejs.dev/config/
-export default defineConfig({
-  base: basePath,
-  plugins: [
-    ...(useFirebaseMock ? [firebaseMockServerPlugin()] : []),
-    Vue({
-      template: { transformAssetUrls },
-    }),
-    // https://github.com/vuetifyjs/vuetify-loader/tree/master/packages/vite-plugin#readme
-    Vuetify({
-      autoImport: true,
-    }),
-    Fonts({
-      fontsource: {
-        families: [
-          {
-            name: 'Roboto',
-            weights: [100, 300, 400, 500, 700, 900],
-            styles: ['normal', 'italic'],
-          },
-        ],
-      },
-    }),
-  ],
-  define: {
-    '__APP_VERSION__': JSON.stringify(packageJson.version),
-    'process.env': {},
-  },
-  resolve: {
-    alias: {
-      '@': fileURLToPath(new URL('src', import.meta.url)),
-      ...(useFirebaseMock
-        ? { 'firebase/database': fileURLToPath(new URL('src/testing/firebaseDatabaseMock.ts', import.meta.url)) }
-        : {}),
-    },
-    extensions: [
-      '.js',
-      '.json',
-      '.jsx',
-      '.mjs',
-      '.ts',
-      '.tsx',
-      '.vue',
+export default defineConfig(({ mode }) => {
+  const env = { ...loadEnv(mode, process.cwd(), ''), ...process.env }
+  const useFirebaseMock = env.VITE_REFINIMO_FIREBASE_MOCK === '1'
+  const basePath = env.VITE_REFINIMO_BASE_PATH ?? '/'
+  const devHost = env.LOCAL_DEV_HOST?.trim() || undefined
+  const devBindHost = env.LOCAL_DEV_BIND_HOST?.trim() || undefined
+  const devPort = parsePort(env.LOCAL_DEV_PORT) ?? 3000
+
+  return {
+    base: basePath,
+    plugins: [
+      ...(useFirebaseMock ? [firebaseMockServerPlugin()] : []),
+      Vue({
+        template: { transformAssetUrls },
+      }),
+      // https://github.com/vuetifyjs/vuetify-loader/tree/master/packages/vite-plugin#readme
+      Vuetify({
+        autoImport: true,
+      }),
+      Fonts({
+        fontsource: {
+          families: [
+            {
+              name: 'Roboto',
+              weights: [100, 300, 400, 500, 700, 900],
+              styles: ['normal', 'italic'],
+            },
+          ],
+        },
+      }),
     ],
-  },
-  server: {
-    port: 3000,
-  },
+    define: {
+      '__APP_VERSION__': JSON.stringify(packageJson.version),
+      'process.env': {},
+    },
+    resolve: {
+      alias: {
+        '@': fileURLToPath(new URL('src', import.meta.url)),
+        ...(useFirebaseMock
+          ? { 'firebase/database': fileURLToPath(new URL('src/testing/firebaseDatabaseMock.ts', import.meta.url)) }
+          : {}),
+      },
+      extensions: [
+        '.js',
+        '.json',
+        '.jsx',
+        '.mjs',
+        '.ts',
+        '.tsx',
+        '.vue',
+      ],
+    },
+    server: {
+      ...(devBindHost ? { host: devBindHost } : {}),
+      ...(devHost ? { allowedHosts: [devHost] } : {}),
+      port: devPort,
+      strictPort: true,
+    },
+  }
 })
