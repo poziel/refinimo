@@ -97,6 +97,20 @@ const router = createRouter({
       },
     })),
     {
+      path: '/demo',
+      component: () => import('@/pages/demo.vue'),
+      meta: {
+        demo: true,
+        title: buildPageTitle(['Try Refinimo']),
+        description: 'Try a real planning poker room with simulated teammates. No setup needed.',
+      },
+    },
+    {
+      path: '/demo/dock/:roomId',
+      component: () => import('@/pages/demo-dock.vue'),
+      meta: { demo: true, dockOnly: true, title: buildPageTitle(['Demo voting dock']) },
+    },
+    {
       path: '/app',
       component: Lobby,
       beforeEnter: to => applySharedLinkRedirect(to, '/app'),

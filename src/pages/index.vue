@@ -103,9 +103,9 @@
                   {{ primaryActionLabel }} <v-icon aria-hidden="true" :icon="APP_ENTRY_ICON" size="18" />
                 </router-link>
 
-                <button class="landing-button landing-button-secondary" data-test-id="landing-try-preview" type="button" @click="tryPreview">
+                <router-link class="landing-button landing-button-secondary" data-test-id="landing-try-preview" to="/demo">
                   <v-icon icon="mdi-play-circle-outline" size="20" /> Try it out
-                </button>
+                </router-link>
               </div>
 
               <p class="landing-setup-note">Free to use. One-time Firebase setup required.
@@ -113,7 +113,7 @@
               </p>
             </div>
 
-            <div ref="previewElement" class="landing-preview">
+            <div class="landing-preview">
               <LandingDemo />
 
             </div>
@@ -289,7 +289,6 @@
   const currentTab = computed(() => route.meta.landingPage ?? 'pitch')
   const logoUrl = `${import.meta.env.BASE_URL}images/logo.png`
   const contentElement = ref<HTMLElement | null>(null)
-  const previewElement = ref<HTMLElement | null>(null)
   const themeModeOptions: Array<{ value: ThemeModePreference, shortLabel: string, icon: string }> = [
     { value: 'system', shortLabel: 'Auto', icon: 'mdi-theme-light-dark' },
     { value: 'dark', shortLabel: 'Dark', icon: 'mdi-weather-night' },
@@ -359,16 +358,6 @@
     await nextTick()
     contentElement.value?.focus({ preventScroll: true })
   })
-
-  function tryPreview () {
-    previewElement.value?.scrollIntoView({
-      behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'instant' : 'smooth',
-      block: 'center',
-    })
-    const previewControl = previewElement.value?.querySelector<HTMLButtonElement>('button[aria-pressed="true"]:enabled')
-      ?? previewElement.value?.querySelector<HTMLButtonElement>('[data-test-id="landing-demo-reveal"]')
-    previewControl?.focus({ preventScroll: true })
-  }
 
   function setLandingTheme (theme: ThemeFamily) {
     appStore.setTheme(theme)

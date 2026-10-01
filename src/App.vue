@@ -22,7 +22,7 @@
 
       <div class="hdr-right">
         <router-link
-          v-if="appStore.currentRoomId && (appStore.roomPresenceActive || appStore.roomHasRoundParticipant)"
+          v-if="!isDemoRoute && appStore.currentRoomId && (appStore.roomPresenceActive || appStore.roomHasRoundParticipant)"
           class="room-pill"
           :class="{ 'room-pill-away': !appStore.roomPresenceActive || !isInRoom }"
           :to="`/app/room/${appStore.currentRoomId}`"
@@ -32,7 +32,7 @@
           <span class="room-meta">{{ appStore.playerCount }} online</span>
         </router-link>
 
-        <UserMenu />
+        <UserMenu :demo="isDemoRoute" />
       </div>
     </v-app-bar>
 
@@ -54,7 +54,7 @@
       {{ appStore.toastMessage }}
     </v-snackbar>
 
-    <ConfigModal v-model="appStore.configModalOpen" />
+    <ConfigModal v-if="!isDemoRoute" v-model="appStore.configModalOpen" />
 
     <!-- ── Global username setup (shown once on first visit) ───────────── -->
     <v-dialog v-model="nameSetupOpen" max-width="480" persistent>
@@ -118,6 +118,7 @@
   const appStore = useAppStore()
   const configStore = useConfigStore()
 
+  const isDemoRoute = computed(() => route.meta.demo === true)
   const isInRoom = computed(() => route.path.startsWith('/app/room/'))
   const isDockOnlyRoute = computed(() => route.meta.dockOnly === true)
   const isPublicRoute = computed(() => route.meta.public === true || isDockOnlyRoute.value)
@@ -146,6 +147,8 @@
   }
 
   onMounted(async () => {
+    // Lazy routes must resolve before deciding whether real room services apply.
+    await router.isReady()
     if (isDockOnlyRoute.value) {
       return
     }
@@ -194,7 +197,7 @@
         allowInEditable: true,
         when: () => !nameSetupOpen.value && !hasActiveOverlay() && route.path !== '/app',
         handler: () => {
-          void router.push('/app')
+          void router.push(isDemoRoute.value ? '/' : '/app')
         },
       },
       {
@@ -206,7 +209,7 @@
           { key: '.', metaKey: true },
         ],
         allowInEditable: true,
-        when: () => !nameSetupOpen.value && !hasActiveOverlay(),
+        when: () => !isDemoRoute.value && !nameSetupOpen.value && !hasActiveOverlay(),
         handler: () => {
           appStore.setConfigModalOpen(true)
         },
@@ -236,7 +239,7 @@
           { key: 'n', metaKey: true, altKey: true },
         ],
         allowInEditable: true,
-        when: () => !nameSetupOpen.value && !hasActiveOverlay() && route.path !== '/app/create',
+        when: () => !isDemoRoute.value && !nameSetupOpen.value && !hasActiveOverlay() && route.path !== '/app/create',
         handler: () => {
           router.push('/app/create')
         },
@@ -244,10 +247,11 @@
     ])
   })
 
-  watch(() => route.fullPath, () => {
+  watch(() => route.fullPath, (_path, previousPath) => {
     if (isDockOnlyRoute.value) return
 
     syncNameSetupPrompt()
+    if (previousPath.startsWith('/demo') && isPublicRoute.value) return
     syncExternalDockContext()
   })
 
@@ -284,6 +288,7 @@
   }
 
   async function restoreRoomPillFromRoundParticipant () {
+    if (isDemoRoute.value || isPublicRoute.value) return
     if (route.path.startsWith('/app/room/')) return
     if (!configStore.userId) return
 
@@ -358,6 +363,7 @@
   }
 
   function syncExternalDockContext () {
+    if (isDemoRoute.value) return
     if (route.meta.dockOnly === true) return
     if (isInRoom.value) {
       const routeRoomId = typeof route.params.roomId === 'string' ? route.params.roomId : null

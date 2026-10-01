@@ -33,12 +33,12 @@
           </v-btn>
 
           <v-btn
-            aria-label="Back to lobby"
+            :aria-label="demo ? 'Exit demo' : 'Back to lobby'"
             class="icon-btn home-btn"
             data-test-id="room-back-to-lobby"
             density="compact"
             icon
-            title="Back to lobby (Esc)"
+            :title="demo ? 'Exit demo (Esc)' : 'Back to lobby (Esc)'"
             variant="text"
             @click="roomCommands.goToLobby()"
           >
@@ -102,17 +102,17 @@
 
           <v-btn
             v-if="configStore.viewMode === 'simple'"
-            :aria-label="appStore.externalDockActive ? 'Close voting dock window' : 'Open voting dock in a window'"
+            :aria-label="windowDockActive ? 'Close voting dock window' : 'Open voting dock in a window'"
             class="icon-btn"
-            :class="{ 'icon-btn-active': appStore.externalDockActive }"
+            :class="{ 'icon-btn-active': windowDockActive }"
             data-test-id="simple-vote-dock-external"
             density="compact"
             icon
-            :title="appStore.externalDockActive ? 'Close voting dock window (Ctrl+Space)' : 'Open voting dock in a window (Ctrl+Space)'"
+            :title="windowDockActive ? 'Close voting dock window (Ctrl+Space)' : 'Open voting dock in a window (Ctrl+Space)'"
             variant="text"
             @click="toggleExternalDock"
           >
-            <v-icon :icon="appStore.externalDockActive ? 'mdi-monitor-off' : 'mdi-open-in-new'" size="16" />
+            <v-icon :icon="windowDockActive ? 'mdi-monitor-off' : 'mdi-open-in-new'" size="16" />
           </v-btn>
 
           <v-btn
@@ -145,13 +145,13 @@
           </v-btn>
 
           <v-btn
-            :aria-label="shareCopied ? 'Copied!' : 'Share room link'"
+            :aria-label="demo ? 'Share demo link' : shareCopied ? 'Copied!' : 'Share room link'"
             class="icon-btn"
             data-test-id="room-share-link"
             density="compact"
-            :disabled="!firebaseConfig"
+            :disabled="!firebaseConfig && !demo"
             icon
-            :title="shareCopied ? 'Copied!' : 'Copy room + config link'"
+            :title="demo ? 'Copy a link to try the demo' : shareCopied ? 'Copied!' : 'Copy room + config link'"
             variant="text"
             @click="roomCommands.copyRoomLink()"
           >
@@ -476,7 +476,7 @@
           v-model:collapsed="dockCollapsed"
           :can-vote="canVoteInCurrentRound"
           :disabled-hint="voteActionHint"
-          :external-dock-active="appStore.externalDockActive"
+          :external-dock-active="windowDockActive"
           :phone-dock-active="phoneDockActive"
           :selected-vote="selectedVote"
           :show-votes="showVotes"
@@ -589,10 +589,9 @@
 <script lang="ts" setup>
   import type { AvatarCrop, RoomHistoryEntry, RoomHistoryVoteSnapshot, RoomRecord, RoomUser, RoundEditLock, RoundTimerState, TaskInfo, VoteValue } from '@/types/room'
   import type { ExternalDockSession } from '@/utils/externalDockSession'
-  import { ref as dbRef, onDisconnect, onValue, remove, runTransaction, set, update } from 'firebase/database'
   import { storeToRefs } from 'pinia'
   import QRCode from 'qrcode'
-  import { computed, onMounted, onUnmounted, ref, watch, watchEffect } from 'vue'
+  import { computed, inject, onMounted, onUnmounted, ref, watch, watchEffect } from 'vue'
   import { onBeforeRouteLeave, useRoute, useRouter } from 'vue-router'
   import AdvertisementSlot from '@/components/AdvertisementSlot.vue'
   import CardWallView from '@/components/CardWallView.vue'
@@ -608,6 +607,8 @@
   import SimpleRoomView from '@/components/SimpleRoomView.vue'
   import TaskInfoModal from '@/components/TaskInfoModal.vue'
   import VoteDock from '@/components/VoteDock.vue'
+  import { ref as dbRef, firebaseRoomDatabase, onDisconnect, onValue, remove, runTransaction, set, update } from '@/data/roomDatabase'
+  import { demoContextKey } from '@/demo/demoContext'
   import { useAppStore } from '@/stores/app'
   import { useConfigStore, type ViewMode } from '@/stores/config'
   import { buildSelectedAvatarCrop, buildSelectedAvatarUrl, DEFAULT_AVATAR_STYLE, isValidCustomAvatarUrl, normalizeAvatarCrop, resolveAvatarBackgroundColor } from '@/utils/avatarStyles'
@@ -627,9 +628,9 @@
     buildConsoleLogEntry,
     buildConsoleLogId,
     buildRoundConsoleLogMap,
-    buildVoteConsoleLogEntry,
     normalizeConsoleLogEntries,
   } from '@/utils/roomConsoleLog'
+  import { buildVoteUpdates, canParticipantVote, getVoteOptions } from '@/utils/roomVoting'
   import {
     buildTimerForRound,
     createRoundTimerStrategy,
@@ -649,7 +650,9 @@
   const router = useRouter()
   const appStore = useAppStore()
   const configStore = useConfigStore()
-  const roomId = route.params.roomId as string
+  const demo = inject(demoContextKey, null)
+  const roomId = demo?.roomId ?? route.params.roomId as string
+  const windowDockActive = computed(() => demo ? demo.dockActive.value : appStore.externalDockActive)
 
   type ConsensusState = 'consensus' | 'close' | 'split'
   type TaskFlowMode = 'current' | 'next'
@@ -688,13 +691,6 @@
     avatarUrl?: string | null
   }
 
-  const PRESET_DECKS: Record<string, VoteValue[]> = {
-    'fibonacci': [0, 1, 2, 3, 5, 8, 13, 21, 34, 55],
-    'modified-fibonacci': [0, 1, 2, 3, 5, 8, 13, 20, 40, 100],
-    'linear': [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 12, 15],
-    'power-of-2': [1, 2, 4, 8, 16, 32, 64, 128],
-    'tshirt': ['XS', 'S', 'M', 'L', 'XL', 'XXL'],
-  }
   const VOTE_SHORTCUT_KEYS = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '0'] as const
   const CONFETTI_PIECE_COUNT = 24
   const VIEW_MODE_SEQUENCE: ViewMode[] = ['table', 'grid', 'simple', 'console', 'group-status']
@@ -705,15 +701,6 @@
     'simple': 'Simple room',
     'table': 'Card wall',
   }
-  function parseCustomDeck (raw: string): VoteValue[] {
-    return raw.split(',').flatMap(s => {
-      const t = s.trim()
-      if (!t) return []
-      const n = Number(t)
-      return [Number.isNaN(n) ? t : n]
-    })
-  }
-
   function countVotes (votes: readonly VoteValue[]): Record<string, number> {
     const counts: Record<string, number> = {}
     for (const vote of votes) {
@@ -732,13 +719,15 @@
     gravatarEmail,
     customAvatarCrop,
     customAvatarUrl,
-    userName,
+    userName: storedUserName,
   } = storeToRefs(configStore)
 
   const currentRoom = ref<RoomRecord | null>(null)
   const roomUsers = ref<Record<string, RoomUser>>({})
 
-  const db = configStore.getDb()
+  const userName = computed(() => demo?.userName.value ?? storedUserName.value)
+  const firebaseDb = demo ? null : configStore.getDb()
+  const db = demo?.database ?? (firebaseDb ? firebaseRoomDatabase(firebaseDb) : null)
   const roomNotFound = ref(false)
   const dockCollapsed = ref(false)
   const shareCopied = ref(false)
@@ -813,7 +802,7 @@
   const canManageRound = computed(() => (!leaderModeEnabled.value || isLeader.value) && !isRoundLockedByOther.value)
   const canCommitFinalVote = computed(() => !leaderModeEnabled.value || isLeader.value)
   const canStartTaskInfoFlow = computed(() => (!leaderModeEnabled.value || isLeader.value) && !isRoundLockedByOther.value)
-  const externalVotingDockActive = computed(() => appStore.externalDockActive || phoneDockActive.value)
+  const externalVotingDockActive = computed(() => windowDockActive.value || phoneDockActive.value)
   const canEditCurrentTask = computed(() =>
     taskInformationEnabled.value
     && !!currentTask.value
@@ -927,11 +916,7 @@
     if (showVotes.value && !allowVoteChangesAfterReveal.value) return 'Voting is locked after reveal for this room'
     return ''
   })
-  const canVoteInCurrentRound = computed(() =>
-    (!showVotes.value || allowVoteChangesAfterReveal.value)
-    && !isRoundLockedByOther.value
-    && (!taskInformationEnabled.value || !!currentTask.value),
-  )
+  const canVoteInCurrentRound = computed(() => canParticipantVote(currentRoom.value, configStore.userId, roomUsers.value))
   const taskDraftInitialValue = computed<TaskInfo | null>(() =>
     pendingTaskFlow.value === 'current' ? currentTask.value : null,
   )
@@ -948,19 +933,7 @@
     pendingTaskFlow.value === 'next' ? 'Start round' : 'Save task information',
   )
 
-  const voteOptions = computed((): VoteValue[] => {
-    const s = currentRoom.value?.settings
-    let base: VoteValue[]
-    if (s?.deck === 'custom') {
-      base = parseCustomDeck(s.customDeck ?? '')
-      if (base.length === 0) base = [...PRESET_DECKS.fibonacci]
-    } else {
-      base = [...(PRESET_DECKS[s?.deck ?? 'fibonacci'] ?? PRESET_DECKS.fibonacci)]
-    }
-    if (s?.specialQuestion !== false) base.push('?')
-    if (s?.specialCoffee !== false) base.push('☕')
-    return base
-  })
+  const voteOptions = computed(() => getVoteOptions(currentRoom.value?.settings))
 
   const orderedEstimateValues = computed(() => {
     const seen = new Set<string>()
@@ -1532,9 +1505,11 @@
       if (!data) {
         roomNotFound.value = true
         currentRoom.value = null
-        configStore.setActiveRoom(null, null)
-        appStore.setRoomInfo(null, '', 0)
-        redirectTimeout = setTimeout(() => router.replace('/app'), 3000)
+        if (!demo) {
+          configStore.setActiveRoom(null, null)
+          appStore.setRoomInfo(null, '', 0)
+        }
+        redirectTimeout = setTimeout(() => router.replace(demo ? '/' : '/app'), 3000)
         return
       }
 
@@ -1546,7 +1521,7 @@
         pendingTaskFlow.value = null
       }
 
-      if (!hasSavedRoom) {
+      if (!demo && !hasSavedRoom) {
         hasSavedRoom = true
         configStore.saveRecentRoom(roomId, data.name)
       }
@@ -1938,6 +1913,7 @@
   }
 
   function syncRoomSummary (roomNameOverride?: string, connectedOverride?: boolean, hasParticipantOverride?: boolean, countOverride?: number) {
+    if (demo) return
     const roomNameValue = roomNameOverride ?? currentRoom.value?.name ?? ''
     const isConnected = connectedOverride ?? isCurrentUserConnected.value
     const hasRoundParticipant = hasParticipantOverride ?? hasCurrentUserRoundParticipant.value
@@ -1982,7 +1958,8 @@
     const avatar = buildCurrentUserAvatarPayload()
     const userRecord = {
       name: userName.value || 'Anonymous',
-      joinedAt: Date.now(),
+      // Preserve the demo's assigned seat when presence feeds the next round.
+      joinedAt: demo && existingParticipant ? existingParticipant.joinedAt : Date.now(),
       ...avatar,
     }
     const roundParticipant = existingParticipant
@@ -2019,6 +1996,11 @@
   }
 
   async function shareRoomConfig () {
+    if (demo) {
+      const ok = await copyText(`${window.location.origin}${import.meta.env.BASE_URL}demo`)
+      appStore.showToast(ok ? 'Demo link copied. Each visitor gets their own practice room.' : 'Copy failed.', ok ? 'success' : 'error')
+      return
+    }
     if (!firebaseConfig.value) return
 
     const encoded = btoa(JSON.stringify(firebaseConfig.value))
@@ -2037,7 +2019,11 @@
   }
 
   function toggleExternalDock () {
-    if (appStore.externalDockActive) {
+    if (demo) {
+      demo.toggleDock()
+      return
+    }
+    if (windowDockActive.value) {
       requestExternalDockClose()
       appStore.setExternalDockActive(false)
       return
@@ -2063,6 +2049,10 @@
   }
 
   async function openPhoneDockQr () {
+    if (demo) {
+      appStore.showToast('Phone voting needs a connected room. Try the separate voting window in this demo.', 'error')
+      return
+    }
     if (phoneDockActive.value || phoneDockConnected.value) {
       await cleanupPhoneDockSession()
       appStore.showToast('Phone voting dock disconnected.', 'success')
@@ -2393,22 +2383,10 @@
     const previousVote = selectedVote.value
     const isVoteChange = previousVote !== null && value !== previousVote
 
-    const newVote = value === previousVote ? null : value
-    const createdAt = Date.now()
     const currentPlayerName = activeRoundParticipants.value[configStore.userId]?.name ?? userName.value ?? 'Anonymous'
-    const entry = buildVoteConsoleLogEntry(
-      previousVote,
-      newVote,
-      createdAt,
-      currentRound.value,
-      configStore.userId,
-      currentPlayerName,
-    )
-    update(dbRef(db, `rooms/${roomId}`), {
-      [`roundParticipants/${configStore.userId}/vote`]: newVote,
-      lastActivity: createdAt,
-      ...buildConsoleLogAppendUpdates([entry], currentRoom.value?.consoleLog),
-    }).catch(console.error)
+    update(dbRef(db, `rooms/${roomId}`), buildVoteUpdates(
+      { ...currentRoom.value!, roundParticipants: activeRoundParticipants.value }, configStore.userId, currentPlayerName, value,
+    )).catch(console.error)
 
     if (isVoteChange && configStore.userId) {
       triggerShakeForUser(configStore.userId)
@@ -2490,24 +2468,6 @@
     return min + Math.random() * (max - min)
   }
 
-  function buildNewVoteOptions (settings: {
-    deck: 'fibonacci' | 'modified-fibonacci' | 'linear' | 'power-of-2' | 'tshirt' | 'custom'
-    customDeck: string
-    specialQuestion: boolean
-    specialCoffee: boolean
-  }): VoteValue[] {
-    let base: VoteValue[]
-    if (settings.deck === 'custom') {
-      base = parseCustomDeck(settings.customDeck)
-      if (base.length === 0) base = [...PRESET_DECKS.fibonacci]
-    } else {
-      base = [...(PRESET_DECKS[settings.deck] ?? PRESET_DECKS.fibonacci)]
-    }
-    if (settings.specialQuestion) base.push('?')
-    if (settings.specialCoffee) base.push('☕')
-    return base
-  }
-
   function applyRoomConfig (settings: {
     name: string
     deck: 'fibonacci' | 'modified-fibonacci' | 'linear' | 'power-of-2' | 'tshirt' | 'custom'
@@ -2533,7 +2493,7 @@
     closePlayerMenu()
     const taskInfoWasEnabled = taskInformationEnabled.value
 
-    const newOptions = buildNewVoteOptions(settings)
+    const newOptions = getVoteOptions(settings)
     const normalizedTimerDurationSeconds = normalizeTimerDurationSeconds(settings.timerDurationSeconds)
     const timerWarningType = settings.timerWarningType === 'percentage' ? 'percentage' : 'seconds'
     const normalizedTimerWarningValue = normalizeTimerWarningValue(settings.timerWarningValue, timerWarningType)
@@ -3024,7 +2984,7 @@
     advanceRound,
     goToLobby () {
       void leaveRoomPresence().finally(() => {
-        router.push('/app')
+        router.push(demo ? '/' : '/app')
       })
     },
   }

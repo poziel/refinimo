@@ -202,14 +202,15 @@ test.describe('Feature: Landing page discovery', () => {
     await expect(page).toHaveURL(/\/$/)
   })
 
-  test('Scenario: Try it out moves keyboard focus into the preview before and after a reveal', async ({ page }) => {
+  test('Scenario: Try it out opens a full practice room without setup', async ({ page }) => {
     await givenTheLandingPageIsOpen(page)
-
-    await page.getByTestId('landing-try-preview').click()
-    await expect(demoVote(page, '5')).toBeFocused()
-    await page.getByTestId('landing-demo-reveal').click()
-    await page.getByTestId('landing-try-preview').click()
-    await expect(page.getByTestId('landing-demo-reveal')).toBeFocused()
+    await page.getByTestId('landing-try-preview').press('Enter')
+    await expect(page).toHaveURL('/demo')
+    await expect(page.getByTestId('demo-session')).toBeVisible()
+    await expect(page.getByTestId('room-shell')).toBeVisible()
+    await expect(page.getByRole('dialog')).toHaveCount(0)
+    await page.getByTestId('demo-exit').click()
+    await expect(page).toHaveURL('/')
   })
 
   test('Scenario: a visitor can open and close a frequently asked question with the keyboard', async ({ page }) => {
@@ -256,7 +257,6 @@ test.describe('Feature: Landing page discovery', () => {
         await page.screenshot({ path: closingScreenshotPath, fullPage: false, animations: 'disabled' })
         await testInfo.attach('Closing hero at 390px', { path: closingScreenshotPath, contentType: 'image/png' })
       }
-      await page.getByTestId('landing-try-preview').click()
       await demoVote(page, '8').click()
       await page.getByTestId('landing-demo-reveal').click()
       await expect(page.getByTestId('landing-demo').getByRole('img', { name: 'You: 8 points' })).toBeVisible()
@@ -300,8 +300,7 @@ test.describe('Feature: Landing page discovery', () => {
     }
 
     await expectControlsInViewport()
-    await page.getByTestId('landing-try-preview').click()
-    await expect(demoVote(page, '5')).toBeFocused()
+    await demoVote(page, '5').focus()
     await demoVote(page, '5').press('Enter')
     await page.getByTestId('landing-demo-reveal').press('Enter')
     await expect(page.getByTestId('landing-demo').getByRole('img', { name: 'You: 5 points' })).toBeVisible()
