@@ -3,6 +3,7 @@
   --font-sans: "Geist", ui-sans-serif, system-ui, sans-serif;
   --font-mono: "Geist Mono", ui-monospace, monospace;
   --radius-control: 9px;
+  --icon-text-gap: 8px;
 
   /* midnight (default) */
   --bg-base: #0a0c10;
@@ -3145,13 +3146,23 @@ button { font-family: inherit; }
   padding: 9px 16px;
   border-radius: var(--radius-control);
   cursor: pointer;
-  display: inline-flex; align-items: center; gap: 8px;
+  display: inline-flex; align-items: center; gap: var(--icon-text-gap);
   transition: all .15s ease;
   letter-spacing: 0;
   text-decoration: none;
   justify-content: center;
   min-width: 0;
   text-transform: none;
+}
+/* Icon/text spacing is shared by native controls and Vuetify slots. */
+.app-shell :is(button, a, label):has(> .v-icon),
+.app-shell .v-btn:not(.v-btn--stacked),
+.app-shell .v-btn:not(.v-btn--stacked) > .v-btn__content {
+  column-gap: var(--icon-text-gap);
+}
+.app-shell .v-btn:not(.v-btn--stacked) > :is(.v-btn__prepend, .v-btn__append),
+.app-shell .v-btn:not(.v-btn--stacked) > .v-btn__content > .v-icon {
+  margin-inline: 0;
 }
 .btn-primary,
 .ui-btn-primary.v-btn {
