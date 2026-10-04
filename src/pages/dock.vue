@@ -20,7 +20,7 @@
         </v-btn>
       </div>
 
-      <template v-if="!configStore.configFound">
+      <template v-if="!demo && !configStore.configFound">
         <div class="dock-window-empty">
           <v-icon icon="mdi-database-off-outline" size="28" />
           <p>Firebase configuration is missing in this window.</p>
@@ -86,10 +86,11 @@
 <script setup lang="ts">
   import type { ExternalDockSession } from '@/utils/externalDockSession'
   import { ref as dbRef, onValue, remove, runTransaction, update } from 'firebase/database'
-  import { computed, onMounted, onUnmounted, ref, watchEffect } from 'vue'
+  import { computed, inject, onMounted, onUnmounted, ref, watchEffect } from 'vue'
   import { useRoute } from 'vue-router'
   import VoteDock from '@/components/VoteDock.vue'
   import { useRoomVotingDock } from '@/composables/useRoomVotingDock'
+  import { demoContextKey } from '@/demo/demoContext'
   import { useAppStore } from '@/stores/app'
   import { useConfigStore } from '@/stores/config'
   import {
@@ -112,6 +113,7 @@
   const appStore = useAppStore()
   const configStore = useConfigStore()
   const route = useRoute()
+  const demo = inject(demoContextKey, null)
   initializeDockConfig()
 
   const context = ref<ExternalDockRoomContext>(resolveInitialContext())
@@ -155,6 +157,10 @@
   })
 
   onMounted(async () => {
+    if (demo) {
+      subscribeToRoom(demo.roomId)
+      return
+    }
     writeHeartbeat()
     heartbeatTimer = setInterval(writeHeartbeat, 1000)
     window.addEventListener('storage', onStorage)
@@ -184,6 +190,7 @@
 
   onUnmounted(() => {
     stop()
+    if (demo) return
     closeDockSession()
     unsubscribeSession?.()
     unregisterShortcuts?.()
@@ -319,7 +326,7 @@
 
   function initializeDockConfig () {
     configStore.initializeConfig()
-    applyRouteConfig()
+    if (!demo) applyRouteConfig()
     applyRouteTheme()
   }
 
@@ -339,6 +346,7 @@
   }
 
   function resolveInitialContext (): ExternalDockRoomContext {
+    if (demo) return { roomId: demo.roomId, roomName: 'Practice room', updatedAt: Date.now() }
     const routeRoomId = typeof route.params.roomId === 'string' && route.params.roomId.trim()
       ? route.params.roomId.trim()
       : null

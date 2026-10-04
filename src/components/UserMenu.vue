@@ -30,6 +30,7 @@
       <v-divider class="ui-menu-divider" />
 
       <v-list-item
+        v-if="!demo"
         class="ui-menu-item"
         data-test-id="user-menu-configuration"
         prepend-icon="mdi-cog"
@@ -67,17 +68,19 @@
   import KeyboardShortcutsModal from '@/components/KeyboardShortcutsModal.vue'
   import PlayerAvatar from '@/components/PlayerAvatar.vue'
   import UserSettingsModal from '@/components/settings/UserSettingsModal.vue'
+  import { DEMO_VISITOR_NAME } from '@/demo/demoContext'
   import { useAppStore } from '@/stores/app'
   import { useConfigStore } from '@/stores/config'
   import { buildGravatarAvatarUrl, isValidGravatarEmail } from '@/utils/avatarStyles'
 
+  const menuProps = defineProps<{ demo?: boolean }>()
   const appStore = useAppStore()
   const configStore = useConfigStore()
   const { userName } = storeToRefs(configStore)
 
   const aboutModalOpen = ref(false)
 
-  const displayName = computed(() => userName.value || 'Guest')
+  const displayName = computed(() => menuProps.demo ? DEMO_VISITOR_NAME : userName.value || 'Guest')
   const avatarUrl = computed(() => (
     configStore.avatarSource === 'gravatar' && isValidGravatarEmail(configStore.gravatarEmail)
       ? buildGravatarAvatarUrl(configStore.gravatarEmail, 128)

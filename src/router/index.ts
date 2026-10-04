@@ -3,6 +3,7 @@ import Config from '@/pages/config.vue'
 import Index from '@/pages/index.vue'
 import Lobby from '@/pages/lobby.vue'
 import { useConfigStore } from '@/stores/config'
+import { LANDING_PAGES } from '@/utils/landingNavigation'
 import { buildPageTitle } from '@/utils/pageTitle'
 
 function requireConfig (to: RouteLocationNormalized) {
@@ -70,16 +71,44 @@ function buildCanonicalUrl (fullPath: string) {
 
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
+  scrollBehavior (to, from, savedPosition) {
+    if (savedPosition) {
+      return savedPosition
+    }
+    if (to.hash) {
+      return { el: to.hash, top: 24 }
+    }
+    if (to.meta.public && to.path !== from.path) {
+      return { top: 0 }
+    }
+  },
   routes: [
-    {
-      path: '/',
+    ...LANDING_PAGES.map(page => ({
+      path: page.path,
       component: Index,
-      beforeEnter: to => applySharedLinkRedirect(to, '/app'),
+      beforeEnter: page.path === '/'
+        ? (to: RouteLocationNormalized) => applySharedLinkRedirect(to, '/app')
+        : undefined,
       meta: {
         public: true,
-        title: buildPageTitle(['Planning poker for scrum teams']),
-        description: 'Refinimo is a collaborative planning poker app for scrum teams to create rooms, join estimation sessions, vote on story points, and reveal results together.',
+        landingPage: page.id,
+        title: buildPageTitle([page.title]),
+        description: page.description,
       },
+    })),
+    {
+      path: '/demo',
+      component: () => import('@/pages/demo.vue'),
+      meta: {
+        demo: true,
+        title: buildPageTitle(['Try Refinimo']),
+        description: 'Try a real planning poker room with simulated teammates. No setup needed.',
+      },
+    },
+    {
+      path: '/demo/dock/:roomId',
+      component: () => import('@/pages/demo-dock.vue'),
+      meta: { demo: true, dockOnly: true, title: buildPageTitle(['Demo voting dock']) },
     },
     {
       path: '/app',

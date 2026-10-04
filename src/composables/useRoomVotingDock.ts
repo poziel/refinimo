@@ -1,12 +1,10 @@
 import type { RoomRecord, RoomUser, VoteValue } from '@/types/room'
-import { ref as dbRef, onValue, update } from 'firebase/database'
 import { storeToRefs } from 'pinia'
-import { computed, type ComputedRef, ref, type Ref } from 'vue'
+import { computed, type ComputedRef, inject, ref, type Ref } from 'vue'
+import { ref as dbRef, firebaseRoomDatabase, onValue, update } from '@/data/roomDatabase'
+import { demoContextKey } from '@/demo/demoContext'
 import { useConfigStore } from '@/stores/config'
-import {
-  buildConsoleLogAppendUpdates,
-  buildVoteConsoleLogEntry,
-} from '@/utils/roomConsoleLog'
+import { buildVoteUpdates, canParticipantVote, getVoteOptions } from '@/utils/roomVoting'
 
 type ConsensusState = 'consensus' | 'close' | 'split'
 
@@ -28,25 +26,6 @@ interface RoundStats {
 interface RoomVotingDockOptions {
   userId?: ComputedRef<string | null> | Ref<string | null>
   userName?: ComputedRef<string> | Ref<string>
-}
-
-const PRESET_DECKS: Record<string, VoteValue[]> = {
-  'fibonacci': [0, 1, 2, 3, 5, 8, 13, 21, 34, 55],
-  'modified-fibonacci': [0, 1, 2, 3, 5, 8, 13, 20, 40, 100],
-  'linear': [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 12, 15],
-  'power-of-2': [1, 2, 4, 8, 16, 32, 64, 128],
-  'tshirt': ['XS', 'S', 'M', 'L', 'XL', 'XXL'],
-}
-
-function parseCustomDeck (raw: string): VoteValue[] {
-  return raw.split(',').flatMap(s => {
-    const value = s.trim()
-    if (!value) {
-      return []
-    }
-    const numericValue = Number(value)
-    return [Number.isNaN(numericValue) ? value : numericValue]
-  })
 }
 
 function countVotes (votes: readonly VoteValue[]): Record<string, number> {
@@ -73,7 +52,14 @@ export function useRoomVotingDock (options: RoomVotingDockOptions = {}) {
   const roomUsers = ref<Record<string, RoomUser>>({})
   const roomMissing = ref(false)
   const activeRoomId = ref<string | null>(null)
-  const db = computed(() => configStore.getDb())
+  const demo = inject(demoContextKey, null)
+  const db = computed(() => {
+    if (demo) {
+      return demo.database
+    }
+    const database = configStore.getDb()
+    return database ? firebaseRoomDatabase(database) : null
+  })
 
   let unsubscribeRoom: (() => void) | null = null
   let unsubscribeUsers: (() => void) | null = null
@@ -84,11 +70,10 @@ export function useRoomVotingDock (options: RoomVotingDockOptions = {}) {
   const leaderModeEnabled = computed(() => currentRoom.value?.settings?.leaderModeEnabled === true)
   const taskInformationEnabled = computed(() => currentRoom.value?.settings?.taskInformationEnabled === true)
   const currentTask = computed(() => currentRoom.value?.currentTask ?? null)
-  const currentRound = computed(() => currentRoom.value?.roundNumber ?? 1)
   const committedVote = computed(() => currentRoom.value?.committedVote ?? null)
   const leaderUserId = computed(() => currentRoom.value?.leaderUserId ?? null)
-  const effectiveUserId = computed(() => options.userId?.value ?? configStore.userId)
-  const effectiveUserName = computed(() => options.userName?.value ?? userName.value)
+  const effectiveUserId = computed(() => demo?.userId ?? options.userId?.value ?? configStore.userId)
+  const effectiveUserName = computed(() => demo?.userName.value ?? options.userName?.value ?? userName.value)
   const isLeader = computed(() => !leaderModeEnabled.value || (!!effectiveUserId.value && leaderUserId.value === effectiveUserId.value))
   const isRoundLockedByOther = computed(() =>
     !!currentRoom.value?.roundEditLock
@@ -103,25 +88,7 @@ export function useRoomVotingDock (options: RoomVotingDockOptions = {}) {
     effectiveUserId.value ? activeRoundParticipants.value[effectiveUserId.value] : undefined,
   )
 
-  const voteOptions = computed((): VoteValue[] => {
-    const settings = currentRoom.value?.settings
-    let base: VoteValue[]
-    if (settings?.deck === 'custom') {
-      base = parseCustomDeck(settings.customDeck ?? '')
-      if (base.length === 0) {
-        base = [...PRESET_DECKS.fibonacci]
-      }
-    } else {
-      base = [...(PRESET_DECKS[settings?.deck ?? 'fibonacci'] ?? PRESET_DECKS.fibonacci)]
-    }
-    if (settings?.specialQuestion !== false) {
-      base.push('?')
-    }
-    if (settings?.specialCoffee !== false) {
-      base.push('☕')
-    }
-    return base
-  })
+  const voteOptions = computed(() => getVoteOptions(currentRoom.value?.settings))
 
   const orderedEstimateValues = computed(() => {
     const seen = new Set<string>()
@@ -157,12 +124,7 @@ export function useRoomVotingDock (options: RoomVotingDockOptions = {}) {
     return Object.keys(counts).length > 0 ? counts : null
   })
   const selectedVote = computed(() => currentParticipant.value?.vote ?? null)
-  const canVoteInCurrentRound = computed(() =>
-    !!currentParticipant.value
-    && (!showVotes.value || allowVoteChangesAfterReveal.value)
-    && !isRoundLockedByOther.value
-    && (!taskInformationEnabled.value || !!currentTask.value),
-  )
+  const canVoteInCurrentRound = computed(() => canParticipantVote(currentRoom.value, effectiveUserId.value, roomUsers.value))
   const canCommitFinalVote = computed(() => !leaderModeEnabled.value || isLeader.value)
   const voteActionHint = computed(() => {
     if (!currentParticipant.value) {
@@ -300,24 +262,10 @@ export function useRoomVotingDock (options: RoomVotingDockOptions = {}) {
       return
     }
 
-    const previousVote = selectedVote.value
-    const newVote = value === previousVote ? null : value
-    const createdAt = Date.now()
     const currentPlayerName = currentParticipant.value?.name ?? effectiveUserName.value ?? 'Anonymous'
-    const entry = buildVoteConsoleLogEntry(
-      previousVote,
-      newVote,
-      createdAt,
-      currentRound.value,
-      effectiveUserId.value,
-      currentPlayerName,
-    )
-
-    update(dbRef(db.value, `rooms/${activeRoomId.value}`), {
-      [`roundParticipants/${effectiveUserId.value}/vote`]: newVote,
-      lastActivity: createdAt,
-      ...buildConsoleLogAppendUpdates([entry], currentRoom.value?.consoleLog),
-    }).catch(console.error)
+    update(dbRef(db.value, `rooms/${activeRoomId.value}`), buildVoteUpdates(
+      { ...currentRoom.value!, roundParticipants: activeRoundParticipants.value }, effectiveUserId.value, currentPlayerName, value,
+    )).catch(console.error)
   }
 
   function commitVote (value: string) {
