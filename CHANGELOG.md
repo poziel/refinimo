@@ -9,6 +9,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 Upcoming release notes are copied from merged pull request changelog sections.
 
+## [2.1.0] - 2026-10-04
+
+### Added
+- Full interactive practice rooms that require no Firebase configuration and support repeated rounds, room settings, custom decks, timers, tasks, history, reactions, and a separate voting dock.
+- A roster of 100 simulated teammates with individual names, colors, and varied avatar styles, weighted team sizes, and randomized visitor seating.
+- Dedicated Features and Your database pages with illustrated Firebase setup instructions, console shortcuts, and expandable Realtime Database rules.
+- A GitHub star button, shared maker credit, and planning artwork on the public site.
+- A local setup command for assigning a development hostname and port, saving environment settings, and installing dependencies.
+- An MIT license file.
+
+### Modified
+- Redesign the landing page and About page with consistent navigation, improved typography and icon spacing, responsive layouts, and refined light and dark theme surfaces.
+- Reuse application playing-card designs throughout the public site and share room persistence and voting logic between live sessions and the practice room.
+- Refresh the README and Firebase configuration guide with bring-your-own-database details, storage behavior, setup instructions, commands, and project artwork.
+
+
 ## [2.0.0] - 2026-06-12
 
 ### Added
@@ -222,7 +238,8 @@ First stable release.
 - **`/attributions` route and page** — attributions content moved inline to the home page.
 - **"Attributions" nav link** from the toolbar.
 
-[Unreleased]: https://github.com/poziel/refinimo/compare/v2.0.0...HEAD
+[Unreleased]: https://github.com/poziel/refinimo/compare/v2.1.0...HEAD
+[2.1.0]: https://github.com/poziel/refinimo/compare/v2.0.0...v2.1.0
 [2.0.0]: https://github.com/poziel/refinimo/compare/v1.5.0...v2.0.0
 [1.5.0]: https://github.com/poziel/Refinimo/compare/v1.4.2...v1.5.0
 [1.4.2]: https://github.com/poziel/Refinimo/compare/v1.4.1...v1.4.2
